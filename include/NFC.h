@@ -8,7 +8,7 @@ class NFCManager {
 public:
     NFCManager(uint8_t sda = 21, uint8_t scl = 22);
     bool begin();
-    bool writeURLOnce(const char* url);  // Write URL and verify it
+    bool writeURLOnce(const char* url, uint32_t maxAttempts = 3);  // Write URL and verify it
     bool verifyURL(const char* written_url);  // Verify if URL matches
     bool readTag(String& url);
     bool isTagPresent(uint32_t timeout = 1000);  // Timeout in milliseconds

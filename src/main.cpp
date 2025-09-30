@@ -23,6 +23,7 @@ LocationManager locationManager;
 NTPClient ntpClient;
 OpenWeather weather;
 NFCManager nfcManager;
+DHTManager dhtManager(4);  // DHT22 on pin 4
 
 // No global variables needed for basic display functionality
 
@@ -82,6 +83,13 @@ void setup() {
   Serial.begin(115200);
   delay(200);
 
+  // Initialize DHT22
+  if (!dhtManager.begin()) {
+    Serial.println("⚠️ DHT22 initialization failed");
+  } else {
+    Serial.println("✅ DHT22 initialized");
+  }
+
   // Initialize SPIFFS
   if(!SPIFFS.begin(true)) {
       Serial.println("❌ SPIFFS Mount Failed");
@@ -121,43 +129,34 @@ void setup() {
 
     // Initialize NFC first after WiFi
     Serial.println("Initializing NFC...");
-    if (nfcManager.begin()) {
-      Serial.println("✅ NFC initialized");
-      
-      // Write URL to the first detected tag
-      const char* url = "http://192.168.3.120:3000/Bcard";
-      const int maxAttempts = 5;  // Try up to 5 times
-      bool writeSuccess = false;
-      
-      Serial.println("Please place your NFC tag to write...");
-      for(int attempt = 1; attempt <= maxAttempts; attempt++) {
-        Serial.printf("Writing attempt %d of %d...\n", attempt, maxAttempts);
-        
-        if (nfcManager.writeURLOnce(url)) {
-          if (nfcManager.verifyURL(url)) {
-            Serial.println("✅ URL written and verified successfully!");
-            writeSuccess = true;
-            break;
-          } else {
-            Serial.println("⚠️ Write verification failed, retrying...");
-          }
-        } else {
-          Serial.println("⚠️ Write failed, retrying...");
-        }
-        
-        if (attempt < maxAttempts) {
-          Serial.println("Waiting 3 seconds before next attempt...");
-          delay(3000);  // Wait 3 seconds between attempts
-        }
-      }
-      
-      if (!writeSuccess) {
-        Serial.println("⚠️ Failed to write URL after all attempts");
-        return;  // Don't proceed if we couldn't write the tag
-      }
-    } else {
+    if (!nfcManager.begin()) {
       Serial.println("⚠️ NFC initialization failed");
       return;  // Don't proceed if NFC init fails
+    }
+    Serial.println("✅ NFC initialized");
+    
+    // Write URL to the first detected tag - 3 attempts only
+    const char* url = "http://192.168.3.120:3000/Bcard";
+    String current_url;
+    Serial.println("Waiting for NFC tag to write URL (3 attempts)...");
+    
+    // First try to read the current URL
+    if (nfcManager.readTag(current_url)) {
+      if (current_url == url) {
+        Serial.println("✅ Tag already contains the correct URL - proceeding with setup");
+      } else {
+        // URL is different, try to write the new one
+        if (!nfcManager.writeURLOnce(url, 3)) {  // Try 3 times only
+          Serial.println("⚠️ Failed to write/verify URL after 3 attempts. System cannot proceed.");
+          return;  // Don't proceed if we can't write the tag
+        }
+      }
+    } else {
+      // Couldn't read the tag, try to write the new URL
+      if (!nfcManager.writeURLOnce(url, 3)) {  // Try 3 times only
+        Serial.println("⚠️ Failed to write/verify URL after 3 attempts. System cannot proceed.");
+        return;  // Don't proceed if we can't write the tag
+      }
     }
 
     delay(1000); // stabilize

@@ -3,6 +3,7 @@
 #include "NTP.h"
 #include "Location.h"
 #include "OpenWeather.h"
+#include "DHT.h"
 #include <WiFi.h>
 #include <Fonts/FreeSansBold12pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
@@ -23,6 +24,7 @@ GxEPD2_3C<GxEPD2_750c_Z90, 16> display(GxEPD2_750c_Z90(PIN_CS, PIN_DC, PIN_RST, 
 extern NTPClient ntpClient;
 extern LocationManager locationManager;
 extern OpenWeather weather;
+extern DHTManager dhtManager;
 
 // Define refresh tracking variables
 unsigned long lastFullRefresh = 0;
@@ -346,7 +348,14 @@ void updateStatusBar(bool refreshDisplay) {
     display.setCursor(10, 40);
     display.print(locationStr);
     
-    // Draw temperature (if available)
+    // Draw indoor temperature and humidity (between location and date)
+    if (dhtManager.readSensor()) {
+        display.setCursor(180, 40);  // Position after location
+        display.printf("%s | %s", dhtManager.getTemperatureString().c_str(), 
+                                  dhtManager.getHumidityString().c_str());
+    }
+    
+    // Draw outdoor temperature (if available)
     if (temp != 0.0) {
         display.setCursor(display.width() - 200, 40);
         display.printf("%.1f°C", temp);

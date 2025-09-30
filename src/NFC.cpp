@@ -30,13 +30,30 @@ bool NFCManager::writePages(uint8_t startPage, const uint8_t *data, uint16_t len
 }
 
 bool NFCManager::readPages(uint8_t startPage, uint8_t numPages, uint8_t *outBuffer) {
+    const uint8_t maxRetries = 3;
+    
     for (uint8_t p = 0; p < numPages; p++) {
         uint8_t pageBuf[4];
-        if (!nfc.ntag2xx_ReadPage(startPage + p, pageBuf)) {
+        bool pageRead = false;
+        
+        for (uint8_t retry = 0; retry < maxRetries && !pageRead; retry++) {
+            if (retry > 0) {
+                delay(50);  // Wait between retries
+                Serial.print("Retry "); Serial.print(retry); Serial.print(" for page "); Serial.println(startPage + p);
+            }
+            
+            if (nfc.ntag2xx_ReadPage(startPage + p, pageBuf)) {
+                pageRead = true;
+            }
+        }
+        
+        if (!pageRead) {
             Serial.print("Failed reading page "); Serial.println(startPage + p);
             return false;
         }
+        
         memcpy(outBuffer + (p * 4), pageBuf, 4);
+        delay(10);  // Small delay between pages
     }
     return true;
 }
@@ -68,20 +85,31 @@ bool NFCManager::isTagPresent(uint32_t timeout) {
     return nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, timeout);
 }
 
-bool NFCManager::writeURLOnce(const char* url) {
+bool NFCManager::writeURLOnce(const char* url, uint32_t maxAttempts) {
     if (!initialized) {
         if (!begin()) return false;
     }
 
     uint8_t uid[7];
     uint8_t uidLength;
+    uint32_t attempts = 0;
 
     Serial.println("Place your NFC tag to write...");
     
-    if (!nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, 1000)) {
-        Serial.println("No tag detected.");
-        return false;
-    }
+    for (attempts = 0; attempts < maxAttempts; attempts++) {
+        Serial.print("Attempt ");
+        Serial.print(attempts + 1);
+        Serial.print(" of ");
+        Serial.println(maxAttempts);
+
+        // Wait for tag with 2 second timeout
+        if (!nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, 2000)) {
+            Serial.println("No tag detected.");
+            if (attempts < maxAttempts - 1) {
+                delay(1000);  // Wait a second before next attempt
+            }
+            continue;
+        }
 
     Serial.print("Tag detected! UID: ");
     printHex(uid, uidLength);
@@ -124,11 +152,28 @@ bool NFCManager::writeURLOnce(const char* url) {
     buf[idx++] = 0xFE;              // Terminator TLV
 
     if (!writePages(4, buf, paddedTotal)) {
-        Serial.println("Failed to write NDEF message");
-        return false;
+        Serial.println("Failed to write NDEF message, retrying...");
+        attempts++;
+        delay(1000);
+        continue;
     }
 
-    return verifyURL(url);
+    // Add delay after writing before verification
+    delay(100);  // Give the tag time to stabilize
+
+    if (!verifyURL(url)) {
+        Serial.println("Failed to verify written URL, retrying...");
+        attempts++;
+        delay(1000);
+        continue;
+    }
+
+    Serial.println("✅ URL successfully written and verified!");
+    return true;
+    }
+
+    Serial.println("⚠️ Failed to write URL after maximum attempts");
+    return false;
 }
 
 bool NFCManager::readTag(String& url) {
@@ -178,10 +223,23 @@ bool NFCManager::readTag(String& url) {
 
 bool NFCManager::verifyURL(const char* written_url) {
     String read_url;
-    if (!readTag(read_url)) {
-        Serial.println("❌ Failed to read tag for verification");
-        return false;
+    const uint8_t maxVerifyRetries = 3;
+    
+    for (uint8_t retry = 0; retry < maxVerifyRetries; retry++) {
+        if (retry > 0) {
+            delay(100);  // Wait between verification attempts
+            Serial.print("Verification retry "); Serial.println(retry);
+        }
+        
+        if (readTag(read_url)) {
+            if (read_url == written_url) {
+                Serial.println("✅ URL verified successfully!");
+                return true;
+            }
+        }
     }
+    
+    Serial.println("❌ Failed to read tag for verification");
 
     if (read_url == written_url) {
         Serial.println("✅ URL verified successfully!");
