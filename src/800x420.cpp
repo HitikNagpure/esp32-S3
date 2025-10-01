@@ -4,7 +4,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 
-const char* ContentManager::CONTENT_BMP_URL = "http://192.168.3.120:3000/image_800x420.bmp";
+const char* ContentManager::CONTENT_BMP_URL = "http://192.168.1.4:3000/image_800x420.bmp";
 
 // BMP header structure
 struct BMPHeader {

@@ -10,10 +10,12 @@
 #include "NTP.h"
 #include "OpenWeather.h"
 #include "NFC.h"
+#include "DHT22.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <Fonts/FreeSansBold12pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
+
 
 // Constants for refresh intervals
 const unsigned long MIN_REFRESH_INTERVAL = 20000;     // Minimum time between any refresh (20s)
@@ -23,17 +25,17 @@ LocationManager locationManager;
 NTPClient ntpClient;
 OpenWeather weather;
 NFCManager nfcManager;
-DHTManager dhtManager(4);  // DHT22 on pin 4
+DHT22Manager dht22;
 
 // No global variables needed for basic display functionality
 
 // No helper functions needed for basic display functionality
 
-void updateDashboardBMP() {
+bool updateDashboardBMP() {
     // Step 1: Update location
     if (!locationManager.updateLocation()) {
         Serial.println("❌ Failed to get location");
-        return;
+        return false;
     }
 
     LocationData loc = locationManager.getCurrentLocation();
@@ -48,35 +50,145 @@ void updateDashboardBMP() {
     // Step 3: HTTP GET request to fetch BMP
     HTTPClient http;
     http.begin(dashboardURL);
-    int httpCode = http.GET();
+    
+    bool success = false;
+    
+    try {
+        int httpCode = http.GET();
+        Serial.printf("HTTP Response code: %d\n", httpCode);
 
-    if (httpCode == HTTP_CODE_OK) {
-        WiFiClient* stream = http.getStreamPtr();
-        // TODO: Read the BMP stream and send to E-Ink display
-        Serial.println("✅ Dashboard BMP downloaded successfully!");
-    } else {
-        Serial.println("⚠️ Failed to download BMP, HTTP code: " + String(httpCode));
+        if (httpCode == HTTP_CODE_OK) {
+            int contentLength = http.getSize();
+            Serial.printf("Content length: %d bytes\n", contentLength);
+
+            if (contentLength > 0) {
+                WiFiClient* stream = http.getStreamPtr();
+                if (stream) {
+                    // Read BMP header (54 bytes)
+                    uint8_t header[54];
+                    size_t headerBytesRead = stream->readBytes(header, 54);
+                    
+                    if (headerBytesRead == 54) {
+                        // Read image data directly to display buffer
+                        display.fillScreen(GxEPD_WHITE);
+                        display.setPartialWindow(0, MAIN_CONTENT_Y, 800, MAIN_CONTENT_HEIGHT);
+                        
+                        // Read and write image data in chunks
+                        uint8_t buffer[800];  // One row at a time
+                        bool dataError = false;
+                        
+                        for (int y = 0; y < MAIN_CONTENT_HEIGHT && !dataError; y++) {
+                            size_t bytesRead = stream->readBytes(buffer, 800);
+                            if (bytesRead == 800) {
+                                for (int x = 0; x < 800; x++) {
+                                    display.drawPixel(x, MAIN_CONTENT_Y + y, buffer[x] < 128 ? GxEPD_BLACK : GxEPD_WHITE);
+                                }
+                            } else {
+                                Serial.printf("❌ Data read error at row %d: got %d bytes\n", y, bytesRead);
+                                dataError = true;
+                            }
+                        }
+                        
+                        if (!dataError) {
+                            display.display(false);
+                            Serial.println("✅ Dashboard BMP downloaded and displayed successfully!");
+                            success = true;
+                        }
+                    } else {
+                        Serial.printf("❌ Failed to read BMP header: got %d bytes\n", headerBytesRead);
+                    }
+                } else {
+                    Serial.println("❌ Failed to get stream pointer");
+                }
+            } else {
+                Serial.println("❌ Invalid content length");
+            }
+        } else {
+            Serial.println("⚠️ Failed to download BMP, HTTP code: " + String(httpCode));
+        }
+    } catch (const std::exception& e) {
+        Serial.printf("❌ Exception during BMP download: %s\n", e.what());
     }
+    
     http.end();
+    return success;
 }
 
-void updateWakeImageBMP(String imageURL) {
+bool updateWakeImageBMP(String imageURL) {
     // Fetch wake-up image (800x420)
     String wakeURL = "http://192.168.1.4:5000/wake_image?url=" + imageURL;
     Serial.println("📥 Downloading wake-up BMP from: " + wakeURL);
 
     HTTPClient http;
     http.begin(wakeURL);
-    int httpCode = http.GET();
+    bool success = false;
 
-    if (httpCode == HTTP_CODE_OK) {
-        WiFiClient* stream = http.getStreamPtr();
-        // TODO: Read the BMP stream and send to E-Ink display
-        Serial.println("✅ Wake-up BMP downloaded successfully!");
-    } else {
-        Serial.println("⚠️ Failed to download wake BMP, HTTP code: " + String(httpCode));
+    try {
+        int httpCode = http.GET();
+        Serial.printf("HTTP Response code: %d\n", httpCode);
+
+        if (httpCode == HTTP_CODE_OK) {
+            int contentLength = http.getSize();
+            Serial.printf("Content length: %d bytes\n", contentLength);
+
+            if (contentLength > 0) {
+                WiFiClient* stream = http.getStreamPtr();
+                if (stream) {
+                    // Read BMP header (54 bytes)
+                    uint8_t header[54] = {0};
+                    size_t headerBytesRead = stream->readBytes(header, 54);
+                    
+                    if (headerBytesRead == 54) {
+                        // Verify BMP header magic bytes (BM)
+                        if (header[0] == 'B' && header[1] == 'M') {
+                            // Read image data directly to display buffer
+                            display.fillScreen(GxEPD_WHITE);
+                            display.setPartialWindow(0, 0, 800, 420);  // Full width, wake image height
+                            
+                            // Read and write image data in chunks
+                            uint8_t buffer[800] = {0};  // One row at a time
+                            bool dataError = false;
+                            
+                            for (int y = 0; y < 420 && !dataError; y++) {
+                                size_t bytesRead = stream->readBytes(buffer, 800);
+                                if (bytesRead == 800) {
+                                    for (int x = 0; x < 800; x++) {
+                                        display.drawPixel(x, y, 
+                                            buffer[x] < 128 ? GxEPD_BLACK : GxEPD_WHITE);
+                                    }
+                                } else {
+                                    Serial.printf("❌ Data read error at row %d: got %d bytes\n", 
+                                        y, bytesRead);
+                                    dataError = true;
+                                }
+                            }
+                            
+                            if (!dataError) {
+                                display.display(false);
+                                Serial.println("✅ Wake-up BMP downloaded and displayed successfully!");
+                                success = true;
+                            }
+                        } else {
+                            Serial.println("❌ Invalid BMP header magic bytes");
+                        }
+                    } else {
+                        Serial.printf("❌ Failed to read BMP header: got %d bytes\n", headerBytesRead);
+                    }
+                } else {
+                    Serial.println("❌ Failed to get stream pointer");
+                }
+            } else {
+                Serial.println("❌ Invalid content length");
+            }
+        } else {
+            Serial.println("⚠️ Failed to download wake BMP, HTTP code: " + String(httpCode));
+        }
+    } catch (const std::exception& e) {
+        Serial.printf("❌ Exception during BMP download: %s\n", e.what());
     }
+
     http.end();
+    return success;
 }
 
 void setup() {
@@ -84,8 +196,8 @@ void setup() {
   delay(200);
 
   // Initialize DHT22
-  if (!dhtManager.begin()) {
-    Serial.println("⚠️ DHT22 initialization failed");
+  if (!DHT22Manager::begin()) {
+    Serial.println("❌ DHT22 initialization failed");
   } else {
     Serial.println("✅ DHT22 initialized");
   }
@@ -109,15 +221,14 @@ void setup() {
   delay(3000); // Keep welcome message visible for 3 seconds
 
   // Step 2: WiFi setup and QR code page
-  Serial.println("🌐 Attempting to connect to saved WiFi...");
+  Serial.println("🌐 Starting WiFi setup process...");
+  
+  // Always show QR code first
+  showQRCode("WIFI:T:nopass;S:ThumbstackTech;;");
+  
+  // Try to connect to saved WiFi
   if (!startWifiPortal()) {
-    // If connection failed, show QR code for setup
-    Serial.println("⚠️ Failed to connect to saved WiFi, showing QR code for setup...");
-    showQRCode("WIFI:T:WPA;S:ESP32-Setup;P:setup1234;;");
-    delay(3000); // Show QR code for 3 seconds
-    
-    // Start portal in AP mode for configuration
-    Serial.println("🌐 Starting WiFi setup portal...");
+    Serial.println("⚠️ Failed to connect to saved WiFi...");
     startWifiPortal(true); // Force portal mode
   }
 
@@ -208,15 +319,19 @@ void setup() {
 void loop() {
     unsigned long currentMillis = millis();
     
+    static unsigned long lastRefreshCheck = 0;
     // Enforce minimum time between any refresh operations
-    if (currentMillis - millis() < MIN_REFRESH_INTERVAL) {
+    if (currentMillis - lastRefreshCheck < MIN_REFRESH_INTERVAL) {
         delay(100);
         return;
     }
+    lastRefreshCheck = currentMillis;
     
     // Check if it's time for full refresh (every hour)
     checkAndRefresh();  // This function in DisplayManager handles the timing check
     
+
+
     // Additional periodic updates if needed
     if (WiFi.status() == WL_CONNECTED) {
         Serial.println("Hourly refresh cycle starting...");

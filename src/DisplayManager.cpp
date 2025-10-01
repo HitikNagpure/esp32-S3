@@ -3,7 +3,8 @@
 #include "NTP.h"
 #include "Location.h"
 #include "OpenWeather.h"
-#include "DHT.h"
+#include "DHT22.h"
+
 #include <WiFi.h>
 #include <Fonts/FreeSansBold12pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
@@ -24,7 +25,8 @@ GxEPD2_3C<GxEPD2_750c_Z90, 16> display(GxEPD2_750c_Z90(PIN_CS, PIN_DC, PIN_RST, 
 extern NTPClient ntpClient;
 extern LocationManager locationManager;
 extern OpenWeather weather;
-extern DHTManager dhtManager;
+extern DHT22Manager dht22;
+
 
 // Define refresh tracking variables
 unsigned long lastFullRefresh = 0;
@@ -339,20 +341,25 @@ void updateStatusBar(bool refreshDisplay) {
     
     // Draw date and day (center)
     display.setFont(&FreeSans9pt7b);
-    display.setCursor(300, 25);
+    int16_t x2, y2;
+    uint16_t w2, h2;
+    display.getTextBounds(dayStr.c_str(), 0, 0, &x2, &y2, &w2, &h2);
+    display.setCursor((display.width() - w2) / 2, 25);
     display.print(dayStr);
-    display.setCursor(300, 45);
+    display.getTextBounds(dateStr.c_str(), 0, 0, &x2, &y2, &w2, &h2);
+    display.setCursor((display.width() - w2) / 2, 45);
     display.print(dateStr);
     
     // Draw location (left)
     display.setCursor(10, 40);
     display.print(locationStr);
     
-    // Draw indoor temperature and humidity (between location and date)
-    if (dhtManager.readSensor()) {
-        display.setCursor(180, 40);  // Position after location
-        display.printf("%s | %s", dhtManager.getTemperatureString().c_str(), 
-                                  dhtManager.getHumidityString().c_str());
+    // Draw DHT22 readings (between location and date/day)
+    if (DHT22Manager::isAvailable()) {
+        display.setCursor(180, 25);  // First line for temperature
+        display.print(DHT22Manager::getTemperatureString());
+        display.setCursor(180, 45);  // Second line for humidity
+        display.print(DHT22Manager::getHumidityString());
     }
     
     // Draw outdoor temperature (if available)

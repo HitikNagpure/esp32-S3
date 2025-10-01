@@ -3,16 +3,21 @@
 
 bool startWifiPortal(bool forcePortal) {
   WiFiManager wm;
+  wm.resetSettings();
   wm.setDebugOutput(true);
-
+  
+  // Configure portal timeout
+  wm.setConfigPortalTimeout(120); // 2 minute timeout
+  
+  // Configure AP settings
+  WiFi.softAP("ThumbstackTech"); // Open network for easy access
+  
   if (forcePortal) {
-    // When forcing portal mode, start AP without trying stored credentials
     Serial.println("Starting forced configuration portal...");
-    return wm.startConfigPortal("ESP32-Setup", "setup1234");
+    return wm.startConfigPortal("ThumbstackTech");
   } else {
-    // Try to connect using stored credentials first
     Serial.println("Attempting to connect using stored credentials...");
-    if (wm.autoConnect()) {
+    if (wm.autoConnect("ThumbstackTech")) {
       Serial.println("✅ Connected to WiFi!");
       Serial.print("IP Address: ");
       Serial.println(WiFi.localIP());

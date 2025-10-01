@@ -4,7 +4,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 
-const char* FullScreenManager::FULLSCREEN_BMP_URL = "http://192.168.3.120:3000/image_800x480.bmp";
+const char* FullScreenManager::FULLSCREEN_BMP_URL = "http://192.168.1.4:3000/image_800x480.bmp";
 
 // BMP header structure
 struct BMPHeader {
