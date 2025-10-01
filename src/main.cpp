@@ -27,6 +27,9 @@ OpenWeather weather;
 NFCManager nfcManager;
 DHT22Manager dht22;
 
+// Flag to indicate all pages have been shown
+bool allPagesDisplayed = false;
+
 // No global variables needed for basic display functionality
 
 // No helper functions needed for basic display functionality
@@ -247,7 +250,9 @@ void setup() {
     Serial.println("✅ NFC initialized");
     
     // Write URL to the first detected tag - 3 attempts only
-    const char* url = "http://192.168.3.120:3000/Bcard";
+    const char* url = "http://192.168.1.4:3000/Bcard";
+
+    // const char* url = "http://192.168.3.120:3000/Bcard";
     String current_url;
     Serial.println("Waiting for NFC tag to write URL (3 attempts)...");
     
@@ -309,6 +314,10 @@ void setup() {
     Serial.println("Loading full screen page...");
     FullScreenManager::downloadFullScreenBMP();
     FullScreenManager::displayFullScreen();
+    
+    // Mark that all pages have been displayed
+    allPagesDisplayed = true;
+    Serial.println("✅ All pages have been displayed. Display sequence complete.");
   } else {
     Serial.println("⚠️ Not connected to WiFi; QR screen will remain visible until connected.");
   }
@@ -317,6 +326,12 @@ void setup() {
 }
 
 void loop() {
+    // If all pages have been displayed, do nothing
+    if (allPagesDisplayed) {
+        delay(1000);  // Just keep the system alive
+        return;
+    }
+    
     unsigned long currentMillis = millis();
     
     static unsigned long lastRefreshCheck = 0;

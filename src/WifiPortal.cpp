@@ -3,7 +3,7 @@
 
 bool startWifiPortal(bool forcePortal) {
   WiFiManager wm;
-  wm.resetSettings();
+  //wm.resetSettings();
   wm.setDebugOutput(true);
   
   // Configure portal timeout
