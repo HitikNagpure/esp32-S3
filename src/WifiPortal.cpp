@@ -6,8 +6,9 @@ bool startWifiPortal(bool forcePortal) {
   //wm.resetSettings();
   wm.setDebugOutput(true);
   
-  // Configure portal timeout
-  wm.setConfigPortalTimeout(120); // 2 minute timeout
+  // Configure timeouts
+  wm.setConnectTimeout(10);        // 10 seconds to attempt WiFi connection
+  wm.setConfigPortalTimeout(120);  // 2 minute timeout for configuration portal
   
   // Configure AP settings
   WiFi.softAP("ThumbstackTech"); // Open network for easy access

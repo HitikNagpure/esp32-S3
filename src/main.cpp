@@ -221,17 +221,13 @@ void setup() {
 
   // Step 1: Show boot message
   showWelcomeMessage();
-  delay(3000); // Keep welcome message visible for 3 seconds
-
-  // Step 2: WiFi setup and QR code page
-  Serial.println("🌐 Starting WiFi setup process...");
+  Serial.println("🌐 Attempting to connect to saved WiFi...");
   
-  // Always show QR code first
-  showQRCode("WIFI:T:nopass;S:ThumbstackTech;;");
-  
-  // Try to connect to saved WiFi
+  // Try to connect to saved WiFi while keeping welcome message displayed
   if (!startWifiPortal()) {
-    Serial.println("⚠️ Failed to connect to saved WiFi...");
+    Serial.println("⚠️ Failed to connect to saved WiFi, showing QR code for setup...");
+    // Only show QR code if connection failed
+    showQRCode("WIFI:T:nopass;S:ThumbstackTech;;");
     startWifiPortal(true); // Force portal mode
   }
 
