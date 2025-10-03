@@ -52,16 +52,16 @@ void showQRCode(const char* text) {
     display.print(altMsg);
 
     // ===== SSID =====
-    const char* ssid = "Network: ThumbstackTech";
+  const char* ssid = "SSID: ESP32-Setup";
     display.getTextBounds(ssid, 0, 0, &tbx, &tby, &tbw, &tbh);
     display.setCursor((display.width() - tbw) / 2, offsetY + qrSize + 70);
     display.print(ssid);
 
-    // ===== Note =====
-    const char* note = "(No password required)";
-    display.getTextBounds(note, 0, 0, &tbx, &tby, &tbw, &tbh);
+    // ===== Password =====
+  const char* pass = "PASS: setup1234";
+    display.getTextBounds(pass, 0, 0, &tbx, &tby, &tbw, &tbh);
     display.setCursor((display.width() - tbw) / 2, offsetY + qrSize + 100);
-    display.print(note);
+    display.print(pass);
 
   } while (display.nextPage());
 }

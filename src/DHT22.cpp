@@ -1,59 +1,40 @@
 #include "DHT22.h"
+#include "DHT.h"
 
-// Initialize static members
-DHT* DHT22Manager::dht = nullptr;
-bool DHT22Manager::initialized = false;
-float DHT22Manager::lastTemp = 0.0f;
-float DHT22Manager::lastHumidity = 0.0f;
+DHT dht(DHT22Manager::DHT_PIN, DHT22);
+
+float DHT22Manager::temperature = 0.0;
+float DHT22Manager::humidity = 0.0;
 unsigned long DHT22Manager::lastReadTime = 0;
 
 bool DHT22Manager::begin() {
-    if (!initialized) {
-        dht = new DHT(DHT_PIN, DHT_TYPE);
-        dht->begin();
-        initialized = true;
-        update(); // Initial reading
-        Serial.println("DHT22 sensor initialized");
-    }
-    return initialized;
+    dht.begin();
+    delay(2000);  // DHT22 requires 2s for initial reading
+    return update();
 }
 
-void DHT22Manager::update() {
-    if (!initialized) return;
-    
+bool DHT22Manager::update() {
     unsigned long currentTime = millis();
     if (currentTime - lastReadTime >= READ_INTERVAL) {
-        float newTemp = dht->readTemperature();
-        float newHumidity = dht->readHumidity();
+        float newTemp = dht.readTemperature();
+        float newHumid = dht.readHumidity();
         
-        if (!isnan(newTemp) && !isnan(newHumidity)) {
-            lastTemp = newTemp;
-            lastHumidity = newHumidity;
+        if (!isnan(newTemp) && !isnan(newHumid)) {
+            temperature = newTemp;
+            humidity = newHumid;
             lastReadTime = currentTime;
+            return true;
         }
     }
+    return false;
 }
 
 float DHT22Manager::getTemperature() {
     update();
-    return lastTemp;
+    return temperature;
 }
 
 float DHT22Manager::getHumidity() {
     update();
-    return lastHumidity;
-}
-
-bool DHT22Manager::isAvailable() {
-    return initialized && !isnan(lastTemp) && !isnan(lastHumidity);
-}
-
-String DHT22Manager::getTemperatureString() {
-    if (!isAvailable()) return "T=--.-";
-    return "T=" + String(lastTemp, 1);
-}
-
-String DHT22Manager::getHumidityString() {
-    if (!isAvailable()) return "H=--.-";
-    return "H=" + String(lastHumidity, 1);
+    return humidity;
 }
